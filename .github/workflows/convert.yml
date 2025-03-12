@@ -60,6 +60,8 @@ jobs:
           source ../venv/bin/activate
           cp ../vitpose-to-coreml/pytorch2coreml.py tools/deployment/pytorch2coreml.py
           mkdir model
+          ls 
+          ls ../
           python tools/model_split.py --source ../vitpose+_small.pth --target model
           python tools/deployment/pytorch2coreml.py \
             configs/wholebody/2d_kpt_sview_rgb_img/topdown_heatmap/coco-wholebody/ViTPose_small_wholebody_256x192.py \
