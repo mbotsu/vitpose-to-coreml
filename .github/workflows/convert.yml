@@ -1,0 +1,67 @@
+name: Convert VitPose to CoreML
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_16.2.0.app
+  TAG_NAME: "vitpose_s256x192_wholebody_fp16"
+
+jobs:
+  build:
+    runs-on: macos-15
+    permissions: 
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: vitpose-to-coreml
+      - uses: dsaltares/fetch-gh-release-asset@master
+        with:
+          repo: 'mbotsu/vitpose-to-coreml'
+          version: 'tags/1.0.0'
+          regex: true
+          file: '.*\.pth'
+          target: 'download/'
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout MMCV
+        uses: actions/checkout@v3
+        with:
+          repository: open-mmlab/mmcv
+          ref: refs/tags/v1.3.9
+          path: 'mmcv'
+      - name: Pip Install MMCV
+        working-directory: mmcv
+        run: MMCV_WITH_OPS=1 pip3 install -e .
+      - name: Checkout ViTPose
+        uses: actions/checkout@v3
+        with:
+          repository: ViTAE-Transformer/ViTPose
+          path: 'ViTPose'
+      - name: Pip Install ViTPose
+        working-directory: ViTPose
+        run: |
+          pip3 install -v -e .
+          pip3 install timm==0.4.9 einops
+          pip3 install coremltools==8.1
+      - name: Convert ViTPose
+        working-directory: ViTPose
+        run: |
+          cp ../vitpose-to-coreml/pytorch2coreml.py tools/deployment/pytorch2coreml.py
+          mkdir model
+          python3 tools/model_split.py --source ../download/vitpose+_s.pth --target model
+          python3 tools/deployment/pytorch2coreml.py \
+            configs/wholebody/2d_kpt_sview_rgb_img/topdown_heatmap/coco-wholebody/ViTPose_small_wholebody_256x192.py \
+            model/wholebody.pth \
+            --output-file vitpose_s256x192_wholebody_fp16.mlpackage
+      - name: Zip artifact
+        working-directory: ViTPose
+        run: zip -ry vitpose_s256x192_wholebody_fp16.mlpackage.zip vitpose_s256x192_wholebody_fp16.mlpackage
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ViTPose/vitpose_s256x192_wholebody_fp16.mlpackage.zip
+          tag_name: ${{ env.TAG_NAME }}
